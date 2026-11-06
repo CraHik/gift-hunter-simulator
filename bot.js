@@ -1,3 +1,5 @@
+
+const express = require("express");
 const { Pool } = require("pg");
 
 const pool = new Pool({
@@ -6,8 +8,6 @@ const pool = new Pool({
     ? { rejectUnauthorized: false }
     : false
 });
-const express = require("express");
-
 const app = express();
 app.use(express.json());
 
