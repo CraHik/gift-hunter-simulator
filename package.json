@@ -1,0 +1,16 @@
+
+{
+  "name": "gift-hunter-simulator",
+  "version": "1.0.0",
+  "description": "Gift Hunter Telegram Mini App bot",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
