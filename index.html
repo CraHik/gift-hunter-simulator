@@ -1,0 +1,206 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gift Hunter Simulator</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#10151e;color:#fff;font-family:Arial,sans-serif}
+header{padding:20px 17px;background:#17212d;display:flex;align-items:center;justify-content:space-between}
+.logo{font-size:21px;font-weight:800}
+.demo{font-size:10px;color:#ffcf70;border:1px solid #80632e;padding:5px 8px;border-radius:7px}
+.balance{margin:15px;background:linear-gradient(120deg,#263e5a,#182c42);padding:18px;border-radius:16px}
+.small{font-size:12px;color:#a9b9ca}
+.money{font-size:27px;font-weight:bold;margin-top:7px}
+main{padding:0 15px 90px}
+h2{font-size:18px;margin:22px 0 13px}
+.tabs{position:fixed;bottom:0;left:0;right:0;background:#17212d;display:flex;justify-content:space-around;padding:12px 4px calc(12px + env(safe-area-inset-bottom));border-top:1px solid #33404e}
+.tabs button{background:none;border:0;color:#9aabba;font-size:11px}
+.tabs button.active{color:#62b5ff}
+.tabs span{display:block;font-size:21px;margin-bottom:4px}
+.case{background:linear-gradient(140deg,#263d58,#172a40);border:1px solid #38516c;border-radius:16px;padding:18px;text-align:center}
+.case .emoji{font-size:65px;margin:12px}
+.case button,.action{background:#3390ec;color:white;border:0;border-radius:11px;padding:13px 18px;font-weight:bold;width:100%;font-size:14px}
+.price{color:#8fc8ff;margin:9px}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:11px}
+.gift{background:#1b2735;border:1px solid #2d3c4d;border-radius:13px;padding:13px;text-align:center}
+.gift .emoji{font-size:42px;margin:7px}
+.gift b{display:block;font-size:13px}
+.gift small{display:block;color:#aab8c7;margin:7px}
+button{cursor:pointer}
+button:disabled{opacity:.4}
+.r1{color:#b9c5d1}.r2{color:#62b5ff}.r3{color:#c28aff}.r4{color:#ffd36a}
+.panel{background:#1b2735;padding:15px;border-radius:13px;margin-bottom:12px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.hidden{display:none}
+.notice{font-size:11px;color:#8495a7;text-align:center;margin:18px 0}
+.result{font-size:17px;text-align:center;padding:18px;background:#26384c;border-radius:14px;margin-top:12px}
+</style>
+</head>
+<body>
+<header>
+ <div class="logo">🎁 GIFT HUNTER</div>
+ <div class="demo">DEMO SIMULATOR</div>
+</header>
+
+<div class="balance">
+ <div class="small">ТВОЙ ВИРТУАЛЬНЫЙ БАЛАНС</div>
+ <div class="money">🪙 <span id="balance">10000</span></div>
+ <div class="small">Только игровые монеты · Не имеют реальной стоимости</div>
+</div>
+
+<main>
+<section id="home">
+ <h2>🎁 Открытие кейсов</h2>
+ <div class="case">
+  <div class="small">GIFT HUNTER CASE</div>
+  <div class="emoji">🎁</div>
+  <h3>Подарочный кейс</h3>
+  <div class="price">Стоимость: 1 000 монет</div>
+  <button onclick="openCase()">ОТКРЫТЬ КЕЙС</button>
+ </div>
+ <div id="result"></div>
+ <h2>✨ Возможные подарки</h2>
+ <div class="grid" id="possible"></div>
+</section>
+
+<section id="collection" class="hidden">
+ <h2>🎒 Моя коллекция</h2>
+ <div class="panel row">
+  <span>Всего подарков</span><b id="count">0</b>
+ </div>
+ <div class="grid" id="inventory"></div>
+</section>
+
+<section id="market" class="hidden">
+ <h2>🛒 Виртуальный рынок</h2>
+ <p class="small">Покупай и продавай подарки за игровые монеты.</p>
+ <div class="grid" id="marketItems"></div>
+</section>
+
+<section id="craft" class="hidden">
+ <h2>⚒️ Улучшение подарков</h2>
+ <div class="panel">
+  <b>Как работает крафт?</b>
+  <p class="small">Обменивай 3 подарка одинаковой редкости на один подарок следующего уровня. Это игровая механика.</p>
+ </div>
+ <div id="craftItems"></div>
+</section>
+
+<section id="profile" class="hidden">
+ <h2>👤 Профиль игрока</h2>
+ <div class="panel">
+  <div class="small">ИМЯ ИГРОКА</div>
+  <h3>Gift Hunter</h3>
+  <div class="row"><span>Баланс</span><b id="profileBalance">10000</b></div>
+  <div class="row"><span>Подарков собрано</span><b id="profileCount">0</b></div>
+  <div class="row"><span>Открыто кейсов</span><b id="opened">0</b></div>
+ </div>
+ <button class="action" onclick="resetGame()">Сбросить прогресс</button>
+ <p class="notice">Это фанатский симулятор. Подарки, баланс и сделки виртуальные. Нет связи с настоящими Telegram NFT, TON или Stars.</p>
+</section>
+</main>
+
+<nav class="tabs">
+ <button class="active" onclick="tab('home',this)"><span>🏠</span>Главная</button>
+ <button onclick="tab('collection',this)"><span>🎒</span>Коллекция</button>
+ <button onclick="tab('market',this)"><span>🛒</span>Рынок</button>
+ <button onclick="tab('craft',this)"><span>⚒️</span>Крафт</button>
+ <button onclick="tab('profile',this)"><span>👤</span>Профиль</button>
+</nav>
+
+<script>
+const gifts=[
+ {id:'bear',name:'Plush Bear',emoji:'🧸',rarity:1,price:300},
+ {id:'rose',name:'Rose',emoji:'🌹',rarity:1,price:350},
+ {id:'cake',name:'Birthday Cake',emoji:'🎂',rarity:1,price:400},
+ {id:'heart',name:'Heart',emoji:'💝',rarity:2,price:900},
+ {id:'diamond',name:'Diamond',emoji:'💎',rarity:2,price:1200},
+ {id:'rocket',name:'Rocket',emoji:'🚀',rarity:3,price:3500},
+ {id:'crown',name:'Golden Crown',emoji:'👑',rarity:3,price:4500},
+ {id:'trophy',name:'Golden Trophy',emoji:'🏆',rarity:4,price:12000}
+];
+const rarityNames=['','Обычный','Редкий','Эпический','Легендарный'];
+const rarityClasses=['','r1','r2','r3','r4'];
+let balance=10000;
+let inventory=[];
+let opened=0;
+
+function update(){
+ document.getElementById('balance').textContent=balance.toLocaleString('ru-RU');
+ document.getElementById('profileBalance').textContent=balance.toLocaleString('ru-RU');
+ document.getElementById('count').textContent=inventory.length;
+ document.getElementById('profileCount').textContent=inventory.length;
+ document.getElementById('opened').textContent=opened;
+ renderInventory();renderMarket();renderCraft();
+}
+function giftCard(g){
+ return `<div class="gift"><div class="emoji">${g.emoji}</div><b>${g.name}</b><small class="${rarityClasses[g.rarity]}">${rarityNames[g.rarity]}</small></div>`;
+}
+function openCase(){
+ if(balance<1000){alert('Недостаточно монет!');return}
+ balance-=1000;opened++;
+ let roll=Math.random()*100;
+ let rarity=roll<55?1:roll<85?2:roll<98?3:4;
+ let pool=gifts.filter(g=>g.rarity===rarity);
+ let gift=pool[Math.floor(Math.random()*pool.length)];
+ inventory.push(gift.id);
+ document.getElementById('result').innerHTML=
+ `<div class="result">🎉 ТЕБЕ ВЫПАЛ ПОДАРОК!<div style="font-size:60px;margin:10px">${gift.emoji}</div><b>${gift.name}</b><p class="${rarityClasses[gift.rarity]}">${rarityNames[gift.rarity]}</p></div>`;
+ update();
+}
+function renderInventory(){
+ let el=document.getElementById('inventory');
+ if(!inventory.length){el.innerHTML='<p class="small">Коллекция пока пуста. Открой первый кейс!</p>';return}
+ el.innerHTML=inventory.map(id=>{
+ let g=gifts.find(x=>x.id===id);
+ return giftCard(g);
+ }).join('');
+}
+function renderMarket(){
+ document.getElementById('marketItems').innerHTML=gifts.map(g=>
+ `<div class="gift"><div class="emoji">${g.emoji}</div><b>${g.name}</b><small class="${rarityClasses[g.rarity]}">${rarityNames[g.rarity]}</small><small>Цена: ${g.price} 🪙</small><button class="action" onclick="buy('${g.id}')">Купить</button></div>`
+ ).join('');
+}
+function buy(id){
+ let g=gifts.find(x=>x.id===id);
+ if(balance<g.price){alert('Не хватает монет!');return}
+ balance-=g.price;inventory.push(id);update();
+}
+function renderCraft(){
+ let el=document.getElementById('craftItems');
+ el.innerHTML=[1,2,3].map(r=>{
+ let group=inventory.filter(id=>gifts.find(g=>g.id===id).rarity===r);
+ return `<div class="panel"><div class="row"><b>${rarityNames[r]} → ${rarityNames[r+1]}</b><span>${group.length}/3</span></div><p class="small">Нужно 3 подарка этой редкости</p><button class="action" ${group.length<3?'disabled':''} onclick="craft(${r})">УЛУЧШИТЬ</button></div>`;
+ }).join('');
+}
+function craft(r){
+ let group=inventory.filter(id=>gifts.find(g=>g.id===id).rarity===r);
+ if(group.length<3)return;
+ let used=group.slice(0,3);
+ used.forEach(id=>inventory.splice(inventory.indexOf(id),1));
+ let pool=gifts.filter(g=>g.rarity===r+1);
+ let result=pool[Math.floor(Math.random()*pool.length)];
+ inventory.push(result.id);
+ alert('Получен подарок: '+result.name+' '+result.emoji);
+ update();
+}
+function tab(id,btn){
+ document.querySelectorAll('main section').forEach(s=>s.classList.add('hidden'));
+ document.getElementById(id).classList.remove('hidden');
+ document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));
+ btn.classList.add('active');
+}
+function resetGame(){
+ if(!confirm('Сбросить весь прогресс?'))return;
+ balance=10000;inventory=[];opened=0;
+ document.getElementById('result').innerHTML='';
+ update();
+}
+document.getElementById('possible').innerHTML=gifts.map(g=>giftCard(g)).join('');
+update();
+</script>
+</body>
+</html>
