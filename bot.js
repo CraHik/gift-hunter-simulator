@@ -10,6 +10,7 @@ const TOKEN = process.env.BOT_TOKEN;
 const WEB_APP_URL = process.env.WEB_APP_URL;
 const SECRET = process.env.BOT_WEBHOOK_SECRET;
 const PORT = process.env.PORT || 3000;
+const SITE_ORIGIN = "https://crahik.github.io";
 
 if (!TOKEN || !WEB_APP_URL || !SECRET || !process.env.DATABASE_URL) {
   throw new Error("Не заданы необходимые переменные окружения");
@@ -18,6 +19,24 @@ if (!TOKEN || !WEB_APP_URL || !SECRET || !process.env.DATABASE_URL) {
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
+});
+
+// Разрешаем запросы с GitHub Pages
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  if (origin === SITE_ORIGIN) {
+    res.setHeader("Access-Control-Allow-Origin", SITE_ORIGIN);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Telegram-Init-Data");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  }
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(origin === SITE_ORIGIN ? 204 : 403);
+  }
+
+  next();
 });
 
 const API = `https://api.telegram.org/bot${TOKEN}`;
@@ -39,13 +58,9 @@ async function telegram(method, data) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data)
   });
-
-  const result = await response.json();
-  if (!result.ok) console.error("Telegram error:", result);
-  return result;
+  return response.json();
 }
 
-// Создание таблиц
 async function initializeDatabase() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
@@ -73,11 +88,9 @@ async function initializeDatabase() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
   `);
-
   console.log("PostgreSQL tables are ready");
 }
 
-// Проверка подлинности Telegram Mini App
 function verifyTelegramData(initData) {
   if (!initData) throw new Error("Открой игру через Telegram");
 
@@ -120,7 +133,6 @@ function verifyTelegramData(initData) {
   return user;
 }
 
-// Авторизация запросов игры
 async function auth(req, res, next) {
   try {
     req.user = verifyTelegramData(req.get("X-Telegram-Init-Data"));
@@ -169,25 +181,18 @@ function randomRarity() {
   return roll < 55 ? 1 : roll < 85 ? 2 : roll < 98 ? 3 : 4;
 }
 
-// Главная проверка сервера и базы
 app.get("/health", async (req, res) => {
   try {
     await pool.query("SELECT 1");
     res.json({ status: "ok", database: "connected" });
   } catch (error) {
     console.error(error);
-    res.status(500).json({
-      status: "error",
-      database: "disconnected"
-    });
+    res.status(500).json({ status: "error", database: "disconnected" });
   }
 });
 
-app.get("/", (req, res) => {
-  res.send("Gift Hunter Bot is running!");
-});
+app.get("/", (req, res) => res.send("Gift Hunter Bot is running!"));
 
-// Получение профиля
 app.get("/api/me", auth, async (req, res) => {
   try {
     await ensureUser(req.user);
@@ -198,10 +203,8 @@ app.get("/api/me", auth, async (req, res) => {
   }
 });
 
-// Открытие кейса
 app.post("/api/case", auth, async (req, res) => {
   const client = await pool.connect();
-
   try {
     await ensureUser(req.user);
     await client.query("BEGIN");
@@ -211,9 +214,7 @@ app.post("/api/case", auth, async (req, res) => {
       [req.user.id]
     );
 
-    if (result.rows[0].balance < 1000) {
-      throw new Error("Недостаточно монет");
-    }
+    if (result.rows[0].balance < 1000) throw new Error("Недостаточно монет");
 
     const gift = randomGift(randomRarity());
 
@@ -221,23 +222,17 @@ app.post("/api/case", auth, async (req, res) => {
       "UPDATE users SET balance = balance - 1000, opened = opened + 1 WHERE id = $1",
       [req.user.id]
     );
-
     await client.query(
       "INSERT INTO inventory (user_id, gift_id) VALUES ($1, $2)",
       [req.user.id, gift.id]
     );
-
     await client.query(
       "INSERT INTO transactions (user_id, type, amount, description) VALUES ($1, 'case', -1000, $2)",
       [req.user.id, gift.name]
     );
 
     await client.query("COMMIT");
-
-    res.json({
-      gift,
-      ...(await getProfile(req.user.id))
-    });
+    res.json({ gift, ...(await getProfile(req.user.id)) });
   } catch (error) {
     await client.query("ROLLBACK");
     res.status(400).json({ error: error.message });
@@ -246,37 +241,28 @@ app.post("/api/case", auth, async (req, res) => {
   }
 });
 
-// Покупка подарка
 app.post("/api/buy", auth, async (req, res) => {
   const client = await pool.connect();
-
   try {
     await ensureUser(req.user);
-
     const gift = gifts.find(g => g.id === req.body.giftId);
     if (!gift) throw new Error("Подарок не найден");
 
     await client.query("BEGIN");
-
     const result = await client.query(
       "SELECT balance FROM users WHERE id = $1 FOR UPDATE",
       [req.user.id]
     );
-
-    if (result.rows[0].balance < gift.price) {
-      throw new Error("Недостаточно монет");
-    }
+    if (result.rows[0].balance < gift.price) throw new Error("Недостаточно монет");
 
     await client.query(
       "UPDATE users SET balance = balance - $1 WHERE id = $2",
       [gift.price, req.user.id]
     );
-
     await client.query(
       "INSERT INTO inventory (user_id, gift_id) VALUES ($1, $2)",
       [req.user.id, gift.id]
     );
-
     await client.query(
       "INSERT INTO transactions (user_id, type, amount, description) VALUES ($1, 'buy', $2, $3)",
       [req.user.id, -gift.price, gift.name]
@@ -292,27 +278,18 @@ app.post("/api/buy", auth, async (req, res) => {
   }
 });
 
-// Крафт: три подарка одной редкости
 app.post("/api/craft", auth, async (req, res) => {
   const client = await pool.connect();
-
   try {
     await ensureUser(req.user);
-
     const rarity = Number(req.body.rarity);
-    if (![1, 2, 3].includes(rarity)) {
-      throw new Error("Неверная редкость");
-    }
+    if (![1, 2, 3].includes(rarity)) throw new Error("Неверная редкость");
 
     const gift = randomGift(rarity + 1);
-
     await client.query("BEGIN");
 
     const items = await client.query(
-      `SELECT id, gift_id FROM inventory
-       WHERE user_id = $1
-       ORDER BY id
-       FOR UPDATE`,
+      "SELECT id, gift_id FROM inventory WHERE user_id = $1 ORDER BY id FOR UPDATE",
       [req.user.id]
     );
 
@@ -321,34 +298,25 @@ app.post("/api/craft", auth, async (req, res) => {
       return item && item.rarity === rarity;
     });
 
-    if (matching.length < 3) {
-      throw new Error("Нужно три подарка одной редкости");
-    }
+    if (matching.length < 3) throw new Error("Нужно три подарка одной редкости");
 
-    const used = matching.slice(0, 3);
-    const ids = used.map(item => item.id);
+    const ids = matching.slice(0, 3).map(item => item.id);
 
     await client.query(
       "DELETE FROM inventory WHERE user_id = $1 AND id = ANY($2::bigint[])",
       [req.user.id, ids]
     );
-
     await client.query(
       "INSERT INTO inventory (user_id, gift_id) VALUES ($1, $2)",
       [req.user.id, gift.id]
     );
-
     await client.query(
       "INSERT INTO transactions (user_id, type, amount, description) VALUES ($1, 'craft', 0, $2)",
       [req.user.id, gift.name]
     );
 
     await client.query("COMMIT");
-
-    res.json({
-      gift,
-      ...(await getProfile(req.user.id))
-    });
+    res.json({ gift, ...(await getProfile(req.user.id)) });
   } catch (error) {
     await client.query("ROLLBACK");
     res.status(400).json({ error: error.message });
@@ -357,39 +325,26 @@ app.post("/api/craft", auth, async (req, res) => {
   }
 });
 
-// Продажа одного подарка
 app.post("/api/sell", auth, async (req, res) => {
   const client = await pool.connect();
-
   try {
     await ensureUser(req.user);
-
     const gift = gifts.find(g => g.id === req.body.giftId);
     if (!gift) throw new Error("Подарок не найден");
 
     await client.query("BEGIN");
-
     const item = await client.query(
-      `SELECT id FROM inventory
-       WHERE user_id = $1 AND gift_id = $2
-       ORDER BY id LIMIT 1 FOR UPDATE`,
+      "SELECT id FROM inventory WHERE user_id = $1 AND gift_id = $2 ORDER BY id LIMIT 1 FOR UPDATE",
       [req.user.id, gift.id]
     );
-
     if (!item.rowCount) throw new Error("Такого подарка нет в коллекции");
 
     const payout = Math.floor(gift.price * 0.7);
-
-    await client.query(
-      "DELETE FROM inventory WHERE id = $1",
-      [item.rows[0].id]
-    );
-
+    await client.query("DELETE FROM inventory WHERE id = $1", [item.rows[0].id]);
     await client.query(
       "UPDATE users SET balance = balance + $1 WHERE id = $2",
       [payout, req.user.id]
     );
-
     await client.query(
       "INSERT INTO transactions (user_id, type, amount, description) VALUES ($1, 'sell', $2, $3)",
       [req.user.id, payout, gift.name]
@@ -405,29 +360,17 @@ app.post("/api/sell", auth, async (req, res) => {
   }
 });
 
-// Сброс прогресса
 app.post("/api/reset", auth, async (req, res) => {
   const client = await pool.connect();
-
   try {
     await ensureUser(req.user);
     await client.query("BEGIN");
-
-    await client.query(
-      "DELETE FROM inventory WHERE user_id = $1",
-      [req.user.id]
-    );
-
-    await client.query(
-      "DELETE FROM transactions WHERE user_id = $1",
-      [req.user.id]
-    );
-
+    await client.query("DELETE FROM inventory WHERE user_id = $1", [req.user.id]);
+    await client.query("DELETE FROM transactions WHERE user_id = $1", [req.user.id]);
     await client.query(
       "UPDATE users SET balance = 10000, opened = 0 WHERE id = $1",
       [req.user.id]
     );
-
     await client.query("COMMIT");
     res.json(await getProfile(req.user.id));
   } catch (error) {
@@ -438,37 +381,29 @@ app.post("/api/reset", auth, async (req, res) => {
   }
 });
 
-// Telegram webhook
 app.post("/telegram-webhook", async (req, res) => {
   if (req.get("X-Telegram-Bot-Api-Secret-Token") !== SECRET) {
     return res.sendStatus(403);
   }
 
   res.sendStatus(200);
-
   const message = req.body.message;
   if (!message || !message.text) return;
 
-  if (message.text.trim() === "/start" || message.text.trim() === "/help") {
+  if (["/start", "/help"].includes(message.text.trim())) {
     await telegram("sendMessage", {
       chat_id: message.chat.id,
-      text:
-        "🎁 Добро пожаловать в Gift Hunter Simulator!\n\n" +
-        "Открывай виртуальные кейсы, собирай подарки и улучшай коллекцию.\n\n" +
-        "Все монеты и подарки демонстрационные и не имеют реальной стоимости.",
+      text: "🎁 Добро пожаловать в Gift Hunter Simulator!\n\nВсе монеты и подарки демонстрационные и не имеют реальной стоимости.",
       reply_markup: {
-        inline_keyboard: [[
-          {
-            text: "🎁 Открыть симулятор",
-            web_app: { url: WEB_APP_URL }
-          }
-        ]]
+        inline_keyboard: [[{
+          text: "🎁 Открыть симулятор",
+          web_app: { url: WEB_APP_URL }
+        }]]
       }
     });
   }
 });
 
-// Запуск
 async function start() {
   await initializeDatabase();
 
@@ -480,7 +415,6 @@ async function start() {
         url: `${process.env.RENDER_EXTERNAL_URL}/telegram-webhook`,
         secret_token: SECRET
       });
-
       console.log("Webhook setup:", result);
     }
   });
