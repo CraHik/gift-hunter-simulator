@@ -117,6 +117,8 @@ button:disabled{opacity:.4}
 </nav>
 
 <script>
+const API_URL = "https://gift-hunter-simulator-2.onrender.com";
+
 const tg = window.Telegram.WebApp;
 tg.ready();
 tg.expand();
@@ -157,7 +159,7 @@ async function api(path,body=null){
   options.body=JSON.stringify(body);
  }
 
- const response=await fetch('/api'+path,options);
+ const response=await fetch(API_URL+'/api'+path,options);
  const data=await response.json();
 
  if(!response.ok){
@@ -177,7 +179,7 @@ function applyProfile(data){
 async function loadProfile(){
  try{
   if(!tg.initData){
-   throw new Error('Открой симулятор через Telegram-бота');
+   throw new Error('Открой игру через Telegram');
   }
 
   const data=await api('/me');
@@ -200,7 +202,6 @@ function update(){
  document.getElementById('count').textContent=inventory.length;
  document.getElementById('profileCount').textContent=inventory.length;
  document.getElementById('opened').textContent=opened;
-
  renderInventory();
  renderMarket();
  renderCraft();
@@ -280,7 +281,6 @@ function renderMarket(){
 async function buy(id){
  if(busy)return;
  busy=true;
-
  try{
   const data=await api('/buy',{giftId:id});
   applyProfile(data);
@@ -295,7 +295,6 @@ async function buy(id){
 async function sellGift(id){
  if(busy)return;
  busy=true;
-
  try{
   const data=await api('/sell',{giftId:id});
   applyProfile(data);
@@ -309,12 +308,10 @@ async function sellGift(id){
 
 function renderCraft(){
  const el=document.getElementById('craftItems');
-
  el.innerHTML=[1,2,3].map(r=>{
   const group=inventory.filter(id=>
    gifts.find(g=>g.id===id).rarity===r
   );
-
   return `<div class="panel">
    <div class="row">
     <b>${rarityNames[r]} → ${rarityNames[r+1]}</b>
@@ -330,11 +327,9 @@ function renderCraft(){
 async function craft(r){
  if(busy)return;
  busy=true;
-
  try{
   const data=await api('/craft',{rarity:r});
   applyProfile(data);
-
   const gift=gifts.find(g=>g.id===data.gift.id);
   message('✨ Крафт завершён! Получен '+gift.name);
   alert('Получен подарок: '+gift.name+' '+gift.emoji);
@@ -348,9 +343,7 @@ async function craft(r){
 async function resetGame(){
  if(busy)return;
  if(!confirm('Сбросить весь прогресс?'))return;
-
  busy=true;
-
  try{
   const data=await api('/reset',{});
   applyProfile(data);
